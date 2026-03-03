@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>User Verification</title>
+<style>
+body{
+    margin:0;
+    padding:0;
+    font-family: Arial, sans-serif;
+    background:#f4f4f4;
+}
+.container{
+    width:100%;
+    max-width:1100px;
+    margin:80px auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:20px;
+}
+.left{
+    flex:1;
+    text-align:center;
+}
+.left img{
+    width:250px;
+    max-width:100%;
+}
+.right{
+    flex:1;
+    background:white;
+    padding:40px;
+    border:4px solid #2c8bbd;
+    border-radius:6px;
+    box-shadow:0px 4px 10px rgba(0,0,0,0.1);
+}
+.right h2{
+    text-align:center;
+    margin-bottom:20px;
+}
+.right hr{
+    margin-bottom:25px;
+}
+input{
+    width:100%;
+    padding:12px;
+    margin-top:10px;
+    margin-bottom:20px;
+    border:1px solid #ccc;
+    border-radius:5px;
+    font-size:16px;
+}
+button{
+    background:#1e88b8;
+    color:white;
+    padding:12px;
+    width:100%;
+    border:none;
+    border-radius:5px;
+    font-size:16px;
+    cursor:pointer;
+}
+button:hover{
+    background:#166c90;
+}
+@media(max-width:768px){
+    .container{
+        flex-direction:column;
+    }
+    .left{
+        margin-bottom:30px;
+    }
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="left">
+        <img src="./login1.png" alt="Login Image">
+    </div>
+
+    <div class="right">
+        <h2>User Verification For Online Payment</h2>
+        <hr>
+        <label>Mobile Number *</label>
+        <input type="text" id="mobileInput" placeholder="Enter Mobile Number">
+        <button id="submitBtn">Submit</button>
+    </div>
+</div>
+
+<script>
+  // अपना नया Google Sheet CSV लिंक यहाँ डालो (Publish करके लिया हुआ)
+  const sheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRH3xEc_TkIyRElGHV9xMn3OLPUjLo0N7OCFOjCGCtgLGFlrhNSb7R0kbIrd6Jpv342xd5lVGSAT87T/pub?output=csv';
+
+  async function checkMobileInSheet(mobile) {
+    try {
+      const res = await fetch(sheetCsvUrl);
+      if (!res.ok) throw new Error('Sheet नहीं मिला');
+      const csv = await res.text();
+      const rows = csv.split('\n').map(row => row.split(','));
+      const headers = rows[0];
+      const mobileIndex = headers.indexOf('Mobile');
+      if (mobileIndex === -1) return false;
+
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][mobileIndex]?.trim() === mobile.trim()) return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Sheet Error:', err);
+      alert('शीट से डेटा लोड करने में समस्या');
+      return false;
+    }
+  }
+
+  document.getElementById('submitBtn').addEventListener('click', async () => {
+    const mobileInput = document.getElementById('mobileInput');
+    const mobile = mobileInput.value.trim();
+
+    if (!mobile || mobile.length !== 10) {
+      alert('10 डिजिट का सही मोबाइल नंबर डालो');
+      return;
+    }
+
+    const exists = await checkMobileInSheet(mobile);
+    if (exists) {
+      alert('मोबाइल सही है! पेमेंट पेज पर जा रहे हैं...');
+      window.location.href = 'repayment.html?mobile=' + mobile;
+    } else {
+      alert('ये मोबाइल हमारे रिकॉर्ड में नहीं है। सही नंबर डालो या संपर्क करो');
+    }
+  });
+</script>
+</body>
+</html>
