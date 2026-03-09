@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Repayment - PayU</title>
+  <style>
+    body { 
+      margin:0; 
+      font-family: system-ui, sans-serif; 
+      background:#f5f5f5; 
+      min-height:100vh; 
+      display:flex; 
+      align-items:center; 
+      justify-content:center; 
+      padding:16px; 
+    }
+    .container { 
+      width:100%; 
+      max-width:420px; 
+      background:white; 
+      border-radius:16px; 
+      overflow:hidden; 
+      box-shadow:0 10px 30px rgba(0,0,0,0.12); 
+    }
+    .header { 
+      background:#0066ff; 
+      color:white; 
+      padding:24px 20px 20px; 
+      text-align:center; 
+    }
+    .header h1 { margin:0; font-size:24px; font-weight:600; }
+    .header p { margin:8px 0 0; font-size:15px; opacity:0.9; }
+    .amount { font-size:32px; font-weight:700; margin-top:12px; }
+    .content { padding:24px 20px; }
+    label { display:flex; align-items:center; font-size:17px; margin:16px 0; cursor:pointer; }
+    input[type="radio"] { 
+      appearance:none; 
+      width:22px; 
+      height:22px; 
+      border:2px solid #ccc; 
+      border-radius:50%; 
+      margin-right:12px; 
+      position:relative; 
+    }
+    input[type="radio"]:checked { border-color:#0066ff; }
+    input[type="radio"]:checked::after { 
+      content:''; 
+      position:absolute; 
+      width:10px; 
+      height:10px; 
+      background:#0066ff; 
+      border-radius:50%; 
+      top:50%; 
+      left:50%; 
+      transform:translate(-50%,-50%); 
+    }
+    #part-amount-section { display:none; margin:20px 0; }
+    #part-amount-section.show { display:block; }
+    .input-group { margin-bottom:12px; }
+    .input-label { font-size:15px; margin-bottom:6px; display:block; }
+    input[type="number"] { width:100%; padding:12px; font-size:18px; border:1px solid #ddd; border-radius:8px; box-sizing:border-box; }
+    .remaining { font-size:14px; color:#555; }
+    .error { color:#d32f2f; font-size:13px; margin-top:4px; }
+    .pay-btn { 
+      background:#0066ff; 
+      color:white; 
+      border:none; 
+      width:100%; 
+      padding:16px; 
+      font-size:18px; 
+      font-weight:600; 
+      border-radius:12px; 
+      cursor:pointer; 
+      transition:0.2s; 
+    }
+    .pay-btn:disabled { background:#a0c4ff; cursor:not-allowed; }
+    .pay-btn:hover:not(:disabled) { background:#0055dd; }
+    .powered { text-align:center; margin-top:20px; font-size:13px; color:#666; }
+    .time { text-align:center; margin-top:12px; font-size:13px; color:#888; padding-bottom:20px; }
+    .processing { display:none; text-align:center; padding:16px; color:#0066ff; font-size:16px; font-weight:bold; }
+    .success-msg { 
+      display:none; 
+      text-align:center; 
+      padding:40px; 
+      color:#28a745; 
+      font-size:24px; 
+      font-weight:bold; 
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Repayment</h1>
+      <p>Total Repayment Amount</p>
+      <div class="amount" id="total-amount">Loading...</div>
+    </div>
+    <div class="content">
+      <div class="options">
+        <label>
+          <input type="radio" name="payment-type" value="full" checked onchange="togglePart()" />
+          Full Payment
+        </label>
+        <label>
+          <input type="radio" name="payment-type" value="part" onchange="togglePart()" />
+          Part Payment
+        </label>
+      </div>
+      <div id="part-amount-section">
+        <div class="input-group">
+          <label class="input-label">Enter Amount to Pay Now</label>
+          <input type="number" id="part-amount" placeholder="e.g. 15000" min="1" step="1" oninput="updateRemaining()" />
+          <div class="error" id="amount-error"></div>
+        </div>
+        <div class="remaining">Remaining: <span id="remaining-amount">₹ 0.00</span></div>
+      </div>
+      <button class="pay-btn" id="pay-btn" onclick="processPayment()">Pay Now</button>
+      <div class="processing" id="processing">Processing Payment... Please wait</div>
+      <div class="success-msg" id="successMsg">Payment Successful ✓</div>
+      <div class="powered">Powered by PayU</div>
+    </div>
+    <div class="time" id="live-time"></div>
+  </div>
+
+  <script>
+    // Get mobile from URL (?mobile=...)
+    const urlParams = new URLSearchParams(window.location.search);
+    const mobile = urlParams.get('mobile') || '';
+
+    // Sheet URL with CORS proxy
+    const originalUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRH3xEc_TkIyRElGHV9xMn3OLPUjLo0N7OCFOjCGCtgLGFlrhNSb7R0kbIrd6Jpv342xd5lVGSAT87T/pub?output=csv';
+    const sheetCsvUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(originalUrl);
+
+    let totalAmount = 0;
+
+    // Load amount from 'Due_Date_Repay_Amount' column
+    fetch(sheetCsvUrl)
+      .then(res => {
+        if (!res.ok) throw new Error('Network error: ' + res.status);
+        return res.text();
+      })
+      .then(csv => {
+        const rows = csv.trim().split('\n').map(row => row.split(','));
+        const headers = rows[0].map(h => h.trim());
+
+        const mobileIndex = headers.indexOf('Mobile');
+        const amountIndex = headers.indexOf('Due_Date_Repay_Amount');
+
+        if (mobileIndex === -1 || amountIndex === -1) {
+          throw new Error('Columns "Mobile" or "Due_Date_Repay_Amount" missing');
+        }
+
+        let found = false;
+        for (let i = 1; i < rows.length; i++) {
+          if (rows[i][mobileIndex]?.trim() === mobile.trim()) {
+            const raw = rows[i][amountIndex]?.trim() || '0';
+            totalAmount = parseFloat(raw.replace(/[^0-9.]/g, '')) || 0;
+            found = true;
+            break;
+          }
+        }
+
+        const amountEl = document.getElementById('total-amount');
+        if (found && totalAmount > 0) {
+          amountEl.textContent = `₹ ${totalAmount.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+        } else {
+          totalAmount = 37552.00;
+          amountEl.textContent = `₹ ${totalAmount.toLocaleString('en-IN', {minimumFractionDigits: 2})} (No match)`;
+        }
+        updateRemaining();
+      })
+      .catch(err => {
+        console.error('Error:', err);
+        totalAmount = 37552.00;
+        document.getElementById('total-amount').textContent = 
+          `₹ ${totalAmount.toLocaleString('en-IN', {minimumFractionDigits: 2})} (Error loading)`;
+        updateRemaining();
+      });
+
+    function updateTime() {
+      const now = new Date();
+      document.getElementById('live-time').textContent = 
+        now.toLocaleTimeString('en-IN', {hour:'numeric', minute:'2-digit', hour12:true}).toLowerCase();
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    function togglePart() {
+      const isPart = document.querySelector('input[value="part"]').checked;
+      document.getElementById('part-amount-section').classList.toggle('show', isPart);
+      updateRemaining();
+    }
+
+    function updateRemaining() {
+      const partVal = parseFloat(document.getElementById('part-amount').value) || 0;
+      const remaining = totalAmount - partVal;
+      document.getElementById('remaining-amount').textContent = 
+        `₹ ${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+
+      const errorEl = document.getElementById('amount-error');
+      const btn = document.getElementById('pay-btn');
+      errorEl.textContent = '';
+      let valid = true;
+
+      if (document.querySelector('input[value="part"]').checked) {
+        if (partVal < 1) { errorEl.textContent = 'Minimum ₹1'; valid = false; }
+        else if (partVal > totalAmount) { errorEl.textContent = 'Cannot exceed total'; valid = false; }
+      }
+      btn.disabled = !valid;
+    }
+
+    function processPayment() {
+      const payBtn = document.getElementById('pay-btn');
+      const processing = document.getElementById('processing');
+      payBtn.disabled = true;
+      processing.style.display = 'block';
+
+      // Demo success (real PayU ke liye yahan form submit karna)
+      setTimeout(() => {
+        processing.style.display = 'none';
+        document.getElementById('successMsg').style.display = 'block';
+        payBtn.style.display = 'none';
+      }, 2000);
+    }
+
+    togglePart();
+  </script>
+</body>
+</html>
