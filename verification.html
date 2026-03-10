@@ -1,0 +1,77 @@
+// Update this URL after you re-publish the sheet (use the new ?output=csv link)
+const originalUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRH3xEc_TkIyRElGHV9xMn3OLPUjLo0N7OCFOjCGCtgLGFlrhNSb7R0kbIrd6Jpv342xd5lVGSAT87T/pub?output=csv';
+
+const sheetCsvUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(originalUrl);
+
+async function getUserData(mobile) {
+  try {
+    const res = await fetch(sheetCsvUrl);
+    if (!res.ok) {
+      throw new Error(`HTTP error! Status: ${res.status}`);
+    }
+    const csv = await res.text();
+    
+    if (!csv.trim()) {
+      throw new Error('Empty data from sheet');
+    }
+
+    const rows = csv.split('\n').map(row => row.split(','));
+    if (rows.length < 2) {
+      throw new Error('No data rows in sheet');
+    }
+
+    // Clean headers
+    const headers = rows[0].map(h => h.trim().replace(/"/g, ''));
+
+    const mobileIndex = headers.indexOf('Mobile');
+    const repayIndex  = headers.indexOf('Repay_Amount');
+
+    if (mobileIndex === -1) {
+      alert('"Mobile" column not found in sheet headers.');
+      return null;
+    }
+    if (repayIndex === -1) {
+      alert('"Repay_Amount" column not found in sheet headers.');
+      return null;
+    }
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const cellMobile = row[mobileIndex] ? row[mobileIndex].trim().replace(/"/g, '') : '';
+      if (cellMobile === mobile.trim()) {
+        const repayAmount = row[repayIndex] ? row[repayIndex].trim().replace(/"/g, '') : '0';
+        return {
+          found: true,
+          repayAmount: repayAmount || '0'
+        };
+      }
+    }
+    return { found: false };
+  } catch (err) {
+    console.error('Sheet fetch error:', err);
+    alert('Unable to load data. Check internet or sheet publish settings. (Error: ' + err.message + ')');
+    return null;
+  }
+}
+
+document.getElementById('submitBtn').addEventListener('click', async () => {
+  const mobileInput = document.getElementById('mobileInput');
+  const mobile = mobileInput.value.trim();
+
+  if (!mobile || mobile.length !== 10 || !/^\d{10}$/.test(mobile)) {
+    alert('Please enter a valid 10-digit mobile number');
+    return;
+  }
+
+  const result = await getUserData(mobile);
+
+  if (!result) return; // error already alerted
+
+  if (result.found) {
+    alert(`Mobile number verified! Repay Amount: ₹${result.repayAmount}\nRedirecting to payment page...`);
+    // Pass both mobile and repay amount to next page
+    window.location.href = `repayment.html?mobile=${encodeURIComponent(mobile)}&repay=${encodeURIComponent(result.repayAmount)}`;
+  } else {
+    alert('This mobile number is not found in our records. Please enter the correct number or contact support.');
+  }
+});
