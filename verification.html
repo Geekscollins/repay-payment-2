@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>User Verification</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family: Arial, sans-serif;
+  background:#fff;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+.page{
+  display:flex;
+  align-items:center;
+  gap:30px;
+}
+.left img{
+  width:180px;
+}
+.card{
+  width:420px;
+  border:2px solid #29abe2;
+  padding:24px;
+}
+.card-title{
+  font-size:18px;
+  font-weight:bold;
+  text-align:center;
+  margin-bottom:12px;
+}
+.divider{
+  margin-bottom:18px;
+}
+label{
+  font-size:13px;
+}
+input{
+  width:100%;
+  padding:8px 10px;
+  margin:10px 0;
+  border:1px solid #ccc;
+}
+.btn{
+  background:#29abe2;
+  color:#fff;
+  border:none;
+  padding:10px;
+  width:100%;
+  cursor:pointer;
+  font-size:15px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.btn:hover{ background:#1a8fc4; }
+.btn:disabled{ background:#7fc8e8; cursor:not-allowed; }
+
+/* Spinner */
+.spinner{
+  width:18px;
+  height:18px;
+  border:3px solid rgba(255,255,255,0.4);
+  border-top:3px solid #fff;
+  border-radius:50%;
+  animation:spin 0.8s linear infinite;
+  display:none;
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+/* Toast */
+.toast{
+  display:none;
+  margin-top:14px;
+  padding:10px 14px;
+  border-radius:6px;
+  font-size:13px;
+  text-align:center;
+}
+.toast.error{
+  background:#fff0f0;
+  border:1px solid #f5c6c6;
+  color:#c0392b;
+}
+.toast.success{
+  background:#f0fff4;
+  border:1px solid #a8d5b5;
+  color:#1e7e34;
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="left">
+    <img src="login1.png" alt="login">
+  </div>
+  <div class="card">
+    <div class="card-title">User Verification For Online Payment</div>
+    <hr class="divider">
+    <label>User Mobile No. *</label>
+    <input type="text" id="mobile" maxlength="10" placeholder="Enter 10-digit mobile number">
+    <button class="btn" id="submitBtn" onclick="verifyUser()">
+      <span id="btnText">Submit →</span>
+      <div class="spinner" id="spinner"></div>
+    </button>
+    <div class="toast" id="toast"></div>
+  </div>
+</div>
+<script>
+const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRH3xEc_TkIyRElGHV9xMn3OLPUjLo0N7OCFOjCGCtgLGFlrhNSb7R0kbIrd6Jpv342xd5lVGSAT87T/pub?output=csv';
+const mobileIndex = 6;
+const amountIndex = 12;
+
+function showToast(msg, type){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  t.style.display = 'block';
+}
+
+function setLoading(on){
+  const btn = document.getElementById('submitBtn');
+  const txt = document.getElementById('btnText');
+  const spn = document.getElementById('spinner');
+  if(on){
+    btn.disabled = true;
+    txt.textContent = 'Please Wait...';
+    spn.style.display = 'block';
+  } else {
+    btn.disabled = false;
+    txt.textContent = 'Submit →';
+    spn.style.display = 'none';
+  }
+}
+
+async function verifyUser(){
+  document.getElementById('toast').style.display = 'none';
+  const mobile = document.getElementById('mobile').value.trim();
+  if(!/^\d{10}$/.test(mobile)){
+    showToast('⚠️ Please enter a valid 10-digit mobile number', 'error');
+    return;
+  }
+  setLoading(true);
+  try{
+    const res = await fetch(sheetUrl);
+    const csv = await res.text();
+    const rows = csv.split('\n').map(r => r.split(','));
+    for(let i=1;i<rows.length;i++){
+      const m = (rows[i][mobileIndex] || '').trim();
+      if(m === mobile){
+        let amt = rows[i][amountIndex] || "0";
+        amt = amt.replace(/[^0-9.]/g,'');
+        amt = parseFloat(amt) || 0;
+        showToast('✅ Verified! Redirecting...', 'success');
+        setTimeout(() => {
+          window.location.href = `repayment.html?mobile=${mobile}&amount=${amt}`;
+        }, 1000);
+        return;
+      }
+    }
+    setLoading(false);
+    showToast('❌ No record found for this mobile number', 'error');
+  }catch(err){
+    setLoading(false);
+    showToast('⚠️ Server error. Please try again later.', 'error');
+  }
+}
+</script>
+</body>
+</html>
