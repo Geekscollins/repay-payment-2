@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Repayment</title>
+<style>
+body{margin:0;font-family:system-ui;background:#f5f5f5;display:flex;justify-content:center;align-items:center;min-height:100vh;}
+.container{width:100%;max-width:420px;background:#fff;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.1);}
+.header{background:#0066ff;color:#fff;padding:20px;text-align:center;border-radius:16px 16px 0 0;}
+.amount{font-size:30px;font-weight:bold;}
+.content{padding:20px;}
+label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:15px;cursor:pointer;}
+#part-box{display:none;margin-top:10px;}
+input[type="number"]{width:100%;padding:10px;margin-top:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;}
+#remaining{margin-top:6px;font-size:13px;color:#555;}
+button{width:100%;padding:15px;margin-top:15px;background:#0066ff;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer;font-family:system-ui;}
+button:disabled{background:#aaa;cursor:not-allowed;}
+.processing{display:none;text-align:center;color:#0066ff;margin-top:10px;font-size:14px;}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h2 style="margin:0 0 4px;">Repayment</h2>
+    <p style="margin:0 0 8px;font-size:14px;opacity:0.85;">Total Repayment Amount</p>
+    <div class="amount" id="total-amount">Loading...</div>
+  </div>
+  <div class="content">
+    <label><input type="radio" name="type" value="full" checked onchange="togglePart()"> Full Payment</label>
+    <label><input type="radio" name="type" value="part" onchange="togglePart()"> Partial Payment</label>
+    <div id="part-box">
+      <input type="number" id="partAmount" placeholder="Enter partial amount">
+      <div id="remaining"></div>
+    </div>
+    <button id="payBtn" onclick="payNow()">Pay Now</button>
+    <div class="processing" id="processing">⏳ Redirecting...</div>
+  </div>
+</div>
+<script>
+const params = new URLSearchParams(window.location.search);
+const mobile = (params.get('mobile') || '').trim();
+const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRH3xEc_TkIyRElGHV9xMn3OLPUjLo0N7OCFOjCGCtgLGFlrhNSb7R0kbIrd6Jpv342xd5lVGSAT87T/pub?output=csv';
+let totalAmount = 0;
+
+fetch(sheetUrl)
+  .then(r => r.text())
+  .then(csv => {
+    const rows = csv.split('\n').map(r => r.split(','));
+    for (let i = 1; i < rows.length; i++) {
+      if ((rows[i][6] || '').trim() === mobile) {
+        totalAmount = parseFloat((rows[i][12] || '0').replace(/[^0-9.]/g, '')) || 0;
+        document.getElementById('total-amount').innerText = '₹ ' + totalAmount;
+        break;
+      }
+    }
+  })
+  .catch(() => { document.getElementById('total-amount').innerText = 'Error loading'; });
+
+function togglePart() {
+  const isPart = document.querySelector('input[value="part"]').checked;
+  document.getElementById('part-box').style.display = isPart ? 'block' : 'none';
+  document.getElementById('remaining').innerText = '';
+  document.getElementById('partAmount').value = '';
+}
+
+document.getElementById('partAmount').addEventListener('input', function() {
+  const rem = totalAmount - (parseFloat(this.value) || 0);
+  document.getElementById('remaining').innerText = rem >= 0 ? 'Remaining: ₹' + rem : '⚠️ Amount too high!';
+});
+
+function payNow() {
+  const isPart = document.querySelector('input[value="part"]').checked;
+  let payAmount = totalAmount;
+  if (isPart) {
+    const entered = parseFloat(document.getElementById('partAmount').value);
+    if (!entered || entered <= 0) { alert('Valid amount enter karein.'); return; }
+    if (entered > totalAmount) { alert('Amount total se zyada nahi ho sakta: ₹' + totalAmount); return; }
+    payAmount = entered;
+  }
+  document.getElementById('payBtn').disabled = true;
+  document.getElementById('processing').style.display = 'block';
+  window.location.href = 'payment-2026-final.html?amount=' + payAmount + '&mobile=' + encodeURIComponent(mobile) + '&type=' + (isPart ? 'part' : 'full');
+}
+</script>
+</body>
+</html>
